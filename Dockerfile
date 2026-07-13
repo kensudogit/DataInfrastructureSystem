@@ -12,11 +12,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Do NOT set PORT here — Railway injects PORT at runtime.
+# Setting PORT in the image often causes 502 (proxy/target port mismatch).
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PYTHONPATH=/app \
-    PORT=8080 \
     AI_PROVIDER=mock \
     COLLECTOR_USE_MOCK=true
 
@@ -34,11 +35,8 @@ COPY scripts ./scripts
 COPY pyproject.toml ./
 COPY --from=web-builder /web/out /app/apps/web/out
 
-RUN chmod +x /app/scripts/railway_start.sh \
-    && test -f /app/apps/web/out/index.html \
+RUN test -f /app/apps/web/out/index.html \
     && python -c "from apps.api.main import app; print('import-ok', app.title)"
 
-EXPOSE 8080
-
-# Use shell form so Railway $PORT is always honored
-CMD ["/app/scripts/railway_start.sh"]
+# Python entrypoint reads os.environ['PORT'] at runtime (no shell expansion issues)
+CMD ["python", "-m", "apps.api.server"]
