@@ -1,0 +1,17 @@
+.venv
+venv
+__pycache__
+*.pyc
+.git
+.gitignore
+**/node_modules
+**/.next
+apps/web/out
+data/landing
+data/curated
+airflow/logs
+dbt_project/target
+*.egg-info
+.pytest_cache
+.env
+apps/web/.env.local

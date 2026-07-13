@@ -98,16 +98,17 @@ uvicorn apps.api.main:app --reload --port 8000
 - メトリクス: `GET /api/v1/metrics?start_date=2026-07-01&end_date=2026-07-13`（PostgreSQL 優先）
 - AI 提案: `POST /api/v1/ai/optimize`
 
-### フロント（Next.js + React + TypeScript）
+### Railway デプロイ
 
-```bash
-cd apps\web
-npm install
-npm run dev
-```
+ルート Dockerfile が Next.js を静的ビルドし、FastAPI が同一ポートで配信します。
 
-- UI: http://localhost:3000
-- API 接続先: `NEXT_PUBLIC_API_BASE_URL`（既定 `http://localhost:8000`）
+- `/` … サービス画面（AdInfra コンソール）
+- `/api/v1/*` … API
+- `/docs` … OpenAPI
+- `/health` … ヘルスチェック
+
+Railway では `DATABASE_URL` を PostgreSQL サービス接続に設定してください。再デプロイ後、公開 URL のルートで画面が表示されます。
+
 
 ### 収集〜統合（バッチ）
 
