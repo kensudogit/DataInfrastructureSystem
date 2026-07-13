@@ -1,4 +1,4 @@
-"""FastAPI app — keep import-time deps minimal so Railway can boot."""
+"""FastAPI app — API routes must be registered BEFORE the SPA catch-all."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -40,6 +40,18 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": "DataInfrastructureSystem"}
 
 
+# Register API routers BEFORE /{full_path:path}, otherwise the catch-all
+# matches /api/v1/* first and returns {"detail":"Not Found"}.
+try:
+    from apps.api.routers import ai, metrics
+
+    app.include_router(metrics.router, prefix="/api/v1")
+    app.include_router(ai.router, prefix="/api/v1")
+    print("[adinfra] API routes registered at import", flush=True)
+except Exception as exc:  # noqa: BLE001
+    print(f"[adinfra] WARNING: API routes failed to load: {exc!r}", flush=True)
+
+
 @app.get("/", response_model=None)
 def root():
     index = _safe_file("index.html")
@@ -55,30 +67,39 @@ def root():
     )
 
 
-def _register_api_routes() -> None:
-    """Import heavy routers only after the process is alive."""
-    from apps.api.routers import ai, metrics
+def _seed_demo_data() -> None:
+    """Ensure demo curated files exist so the UI is not empty on Railway."""
+    from datetime import date
 
-    app.include_router(metrics.router, prefix="/api/v1")
-    app.include_router(ai.router, prefix="/api/v1")
+    from packages.collectors.registry import get_all_collectors
+    from packages.common.config import get_settings
+    from packages.transformers.pipeline import transform_day
+
+    day = date(2026, 7, 13)
+    settings = get_settings()
+    marker = settings.curated_dir / day.isoformat() / "daily_media_summary.parquet"
+    if marker.exists():
+        return
+    for collector in get_all_collectors():
+        collector.collect(day)
+    transform_day(day, settings)
+    print(f"[adinfra] seeded demo data for {day.isoformat()}", flush=True)
 
 
 @app.on_event("startup")
 async def on_startup() -> None:
     try:
-        _register_api_routes()
-        print("[adinfra] API routes registered", flush=True)
-    except Exception as exc:  # noqa: BLE001 — keep process alive on Railway
-        print(f"[adinfra] WARNING: API routes failed to load: {exc!r}", flush=True)
+        _seed_demo_data()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[adinfra] demo seed skipped: {exc!r}", flush=True)
 
 
 @app.get("/{full_path:path}", response_model=None)
 def spa_and_static(full_path: str):
-    # Never 404 the health alias if routing order differs by platform.
     if full_path == "health":
         return health()
 
-    # Do not swallow API/docs — return JSON 404 for reserved prefixes.
+    # API/docs are registered above; if we reach here they truly don't exist.
     first = full_path.split("/", 1)[0]
     if first in {"api", "docs", "redoc", "openapi.json"} or full_path.startswith("api/"):
         return JSONResponse({"detail": "Not Found"}, status_code=404)
