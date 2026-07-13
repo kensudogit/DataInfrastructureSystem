@@ -1,0 +1,2 @@
+*.sh text eol=lf
+scripts/railway_start.sh text eol=lf

@@ -3,6 +3,5 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-healthcheckPath = "/health"
-healthcheckTimeout = 300
+# Intentionally no healthcheckPath — a failed healthcheck can block traffic (502).
 restartPolicyType = "ON_FAILURE"

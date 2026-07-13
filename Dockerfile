@@ -34,9 +34,11 @@ COPY scripts ./scripts
 COPY pyproject.toml ./
 COPY --from=web-builder /web/out /app/apps/web/out
 
-RUN test -f /app/apps/web/out/index.html \
+RUN chmod +x /app/scripts/railway_start.sh \
+    && test -f /app/apps/web/out/index.html \
     && python -c "from apps.api.main import app; print('import-ok', app.title)"
 
 EXPOSE 8080
 
-CMD ["python", "-m", "apps.api.server"]
+# Use shell form so Railway $PORT is always honored
+CMD ["/app/scripts/railway_start.sh"]
