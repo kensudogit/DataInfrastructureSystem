@@ -6,7 +6,6 @@ WORKDIR /web
 COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci
 COPY apps/web/ ./
-# Same-origin API calls on Railway
 ENV NEXT_PUBLIC_API_BASE_URL=
 RUN npm run build
 
@@ -18,18 +17,25 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PORT=8000
+    PYTHONPATH=/app \
+    PORT=8000 \
+    AI_PROVIDER=mock \
+    COLLECTOR_USE_MOCK=true
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential libpq-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY requirements.txt pyproject.toml ./
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY . .
 COPY --from=web-builder /web/out /app/apps/web/out
 
+# Ensure frontend exists (fail build early if missing)
+RUN test -f /app/apps/web/out/index.html
+
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn apps.api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Railway injects PORT — bind 0.0.0.0:$PORT
+CMD ["python", "-m", "apps.api.server"]

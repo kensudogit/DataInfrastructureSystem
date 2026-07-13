@@ -3,7 +3,17 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def normalize_database_url(url: str) -> str:
+    """Railway provides postgres:// — SQLAlchemy needs a driver dialect."""
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg2://" + url[len("postgres://") :]
+    if url.startswith("postgresql://") and "+psycopg" not in url and "+asyncpg" not in url:
+        return "postgresql+psycopg2://" + url[len("postgresql://") :]
+    return url
 
 
 class Settings(BaseSettings):
@@ -52,7 +62,7 @@ class Settings(BaseSettings):
     tiktok_access_token: str | None = None
     tiktok_advertiser_id: str | None = None
 
-    ai_provider: Literal["openai", "azure_openai", "bedrock", "vertex", "mock"] = "openai"
+    ai_provider: Literal["openai", "azure_openai", "bedrock", "vertex", "mock"] = "mock"
     openai_api_key: str | None = None
     azure_openai_api_key: str | None = None
     azure_openai_endpoint: str | None = None
@@ -60,6 +70,13 @@ class Settings(BaseSettings):
     aws_bedrock_region: str = "ap-northeast-1"
     gcp_vertex_project: str | None = None
     gcp_vertex_location: str = "asia-northeast1"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _normalize_database_url(cls, value: object) -> object:
+        if isinstance(value, str) and value:
+            return normalize_database_url(value)
+        return value
 
     @property
     def landing_dir(self) -> Path:
