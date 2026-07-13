@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1
 
-# --- Build Next.js static export ---
 FROM node:22-alpine AS web-builder
 WORKDIR /web
 COPY apps/web/package.json apps/web/package-lock.json ./
@@ -9,7 +8,6 @@ COPY apps/web/ ./
 ENV NEXT_PUBLIC_API_BASE_URL=
 RUN npm run build
 
-# --- Runtime: FastAPI + static UI ---
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -18,24 +16,27 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PYTHONPATH=/app \
-    PORT=8000 \
+    PORT=8080 \
     AI_PROVIDER=mock \
     COLLECTOR_USE_MOCK=true
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev curl \
+    libpq5 curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt pyproject.toml ./
+COPY requirements.docker.txt ./requirements.txt
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-COPY . .
+COPY apps ./apps
+COPY packages ./packages
+COPY sql ./sql
+COPY scripts ./scripts
+COPY pyproject.toml ./
 COPY --from=web-builder /web/out /app/apps/web/out
 
-# Ensure frontend exists (fail build early if missing)
-RUN test -f /app/apps/web/out/index.html
+RUN test -f /app/apps/web/out/index.html \
+    && python -c "from apps.api.main import app; print('import-ok', app.title)"
 
-EXPOSE 8000
+EXPOSE 8080
 
-# Railway injects PORT — bind 0.0.0.0:$PORT
 CMD ["python", "-m", "apps.api.server"]
