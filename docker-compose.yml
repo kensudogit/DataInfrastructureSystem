@@ -1,0 +1,101 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: adinfra-postgres
+    environment:
+      POSTGRES_USER: adinfra
+      POSTGRES_PASSWORD: adinfra
+      POSTGRES_DB: adinfra
+    ports:
+      - "5433:5432"
+    volumes:
+      - adinfra_pg:/var/lib/postgresql/data
+      - ./sql/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adinfra -d adinfra"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: adinfra-api
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://adinfra:adinfra@postgres:5432/adinfra
+      LANDING_PATH: /app/data/landing
+      CURATED_PATH: /app/data/curated
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+      - adinfra_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    container_name: adinfra-web
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  airflow-webserver:
+    image: apache/airflow:2.9.2
+    container_name: adinfra-airflow-web
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://adinfra:adinfra@postgres:5432/adinfra
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./:/opt/airflow/project
+      - adinfra_data:/opt/airflow/project/data
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      bash -c "airflow db migrate &&
+               airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true &&
+               airflow webserver"
+    profiles:
+      - airflow
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.2
+    container_name: adinfra-airflow-scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://adinfra:adinfra@postgres:5432/adinfra
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./:/opt/airflow/project
+      - adinfra_data:/opt/airflow/project/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: airflow scheduler
+    profiles:
+      - airflow
+
+volumes:
+  adinfra_pg:
+  adinfra_data:

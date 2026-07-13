@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: staging
+    schema: staging
+    tables:
+      - name: fact_ad_performance
+        description: Normalized ad performance fact from collectors
+        columns:
+          - name: grain_key
+            tests: [unique, not_null]
+          - name: report_date
+            tests: [not_null]
+          - name: media
+            tests: [not_null]
