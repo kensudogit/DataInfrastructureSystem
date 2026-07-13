@@ -38,5 +38,7 @@ COPY --from=web-builder /web/out /app/apps/web/out
 RUN test -f /app/apps/web/out/index.html \
     && python -c "from apps.api.main import app; print('import-ok', app.title)"
 
-# Python entrypoint reads os.environ['PORT'] at runtime (no shell expansion issues)
+# Hint for Railway networking detection (actual bind uses $PORT at runtime)
+EXPOSE 8080 3000 8000
+
 CMD ["python", "-m", "apps.api.server"]

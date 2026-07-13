@@ -6,12 +6,10 @@ import sys
 
 
 def main() -> None:
-    # Railway always injects PORT. Never hardcode a listen port.
     port_raw = os.environ.get("PORT")
     if not port_raw:
         print(
-            "[adinfra] WARNING: PORT is unset. "
-            "On Railway this usually causes 502. Falling back to 8080 for local only.",
+            "[adinfra] WARNING: PORT is unset. Falling back to 8080 for local only.",
             flush=True,
         )
         port_raw = "8080"
@@ -21,6 +19,14 @@ def main() -> None:
     print(f"[adinfra] cwd={os.getcwd()}", flush=True)
     print(f"[adinfra] env.PORT={os.environ.get('PORT')!r}", flush=True)
     print(f"[adinfra] binding 0.0.0.0:{port}", flush=True)
+
+    # Bridge common misconfigured Railway domain target ports (3000/8000/8080).
+    try:
+        from apps.api.port_bridge import start_port_bridges
+
+        start_port_bridges(port)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[adinfra] port-bridge skipped: {exc!r}", flush=True)
 
     import uvicorn
 
